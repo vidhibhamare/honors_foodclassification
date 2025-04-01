@@ -1,0 +1,49 @@
+
+# SUPPORTED_IMAGE_EXTNS = [".png", ".jpg", ".jpeg"]  # Add image formats here
+# SUPPORTED_MODALITIES = ["image"]
+
+# DEFAULT_IMAGE_WIDTH = DEFAULT_IMAGE_HEIGHT = 256
+# DEFAULT_IMAGE_CHANNELS = 3
+# DEFAULT_VIDEO_FRAMES = 8
+# DEFAULT_LOG_FREQ = 500
+
+# DEFAULT_ITERATIONS = 300000
+# DEFAULT_EPOCHS = 300
+# DEFAULT_MAX_ITERATIONS = DEFAULT_MAX_EPOCHS = 10000000
+
+# TMP_RES_FOLDER = "results_tmp"
+
+# TMP_CACHE_LOC = "/tmp"
+
+# SUPPORTED_IMAGE_EXTNS = [".png", ".jpg", ".jpeg"]  # Add image formats here
+# SUPPORTED_MODALITIES = ["image"]
+
+# DEFAULT_IMAGE_WIDTH = DEFAULT_IMAGE_HEIGHT = 256
+# DEFAULT_IMAGE_CHANNELS = 3
+# DEFAULT_VIDEO_FRAMES = 8
+# DEFAULT_LOG_FREQ = 500
+
+# DEFAULT_ITERATIONS = 500000
+# DEFAULT_EPOCHS = 2
+# DEFAULT_MAX_ITERATIONS = 500000
+# DEFAULT_MAX_EPOCHS = 500000
+
+# TMP_RES_FOLDER = "results_tmp"
+
+# TMP_CACHE_LOC = "/tmp"
+SUPPORTED_IMAGE_EXTNS = [".png", ".jpg", ".jpeg"]  # Add image formats here
+SUPPORTED_MODALITIES = ["image"]
+
+DEFAULT_IMAGE_WIDTH = DEFAULT_IMAGE_HEIGHT = 256
+DEFAULT_IMAGE_CHANNELS = 3
+DEFAULT_VIDEO_FRAMES = 8
+DEFAULT_LOG_FREQ = 100  # Log more frequently for quick feedback
+
+# Reduced epochs/iterations for rapid prototyping
+DEFAULT_ITERATIONS = 1000      # Instead of 500K
+DEFAULT_EPOCHS = 1             # Test with just 1 epoch first
+DEFAULT_MAX_ITERATIONS = 5000  # Cap at 5K iters for quick runs
+DEFAULT_MAX_EPOCHS = 5         # Max 5 epochs if needed
+
+TMP_RES_FOLDER = "results_tmp"
+TMP_CACHE_LOC = "/tmp"
