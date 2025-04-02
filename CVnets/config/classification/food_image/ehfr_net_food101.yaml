@@ -40,11 +40,11 @@ image_augmentation:
     alpha: 1.2  # Increased from 1.0 (more aggressive cuts)
   resize:
     enable: true
-    size: 288
+    size: 256
     interpolation: "bicubic"
   center_crop:
     enable: true
-    size: 256
+    size: 224
 sampler:
   name: "batch_sampler"
   bs:
@@ -76,8 +76,8 @@ model:
     name: "ehfr_net"
     ehfr_net:
       width_multiplier: 0.5
-      attn_norm_layer: "layer_norm_2d"
-      no_fuse_local_global_features: false
+      #attn_norm_layer: "layer_norm_2d"
+      #no_fuse_local_global_features: false
       no_ca: false
     activation:
       name: "hard_swish"

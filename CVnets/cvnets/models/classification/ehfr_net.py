@@ -15,77 +15,132 @@ class EHFR_Net(BaseEncoder):
     """
     This class defines the EHFR_Net architecture
     """
-
     def __init__(self, opts, *args, **kwargs) -> None:
         num_classes = getattr(opts, "model.classification.n_classes", 101)
         pool_type = getattr(opts, "model.layer.global_pool", "mean")
 
-        ehfr_net_config = get_configuration(opts=opts)
-        image_channels = ehfr_net_config["layer0"]["img_channels"]
-        out_channels = ehfr_net_config["layer0"]["out_channels"]
+        # Load EfficientNet-B0 backbone (pretrained)
+        backbone = models.efficientnet_b0(pretrained=True)
+        self.backbone = backbone.features  # Use only the feature extractor
+        out_channels = 1280  # EfficientNet-B0's final num features
 
         super().__init__(*args, **kwargs)
 
-        # store model configuration in a dictionary
-        self.model_conf_dict = dict()
-        self.conv_1 = ConvLayer(
-            opts=opts,
-            in_channels=image_channels,
-            out_channels=out_channels,
-            kernel_size=3,
-            stride=2,
-            use_norm=True,
-            use_act=True,
-        )
-
-        self.model_conf_dict["conv1"] = {"in": image_channels, "out": out_channels}
-
-        in_channels = out_channels
-        self.layer_1, out_channels = self._make_hblock(
-            opts=opts, input_channel=in_channels, cfg=ehfr_net_config["layer1"]
-        )
-        self.model_conf_dict["layer1"] = {"in": in_channels, "out": out_channels}
-
-        in_channels = out_channels
-        self.layer_2, out_channels = self._make_hblock(
-            opts=opts, input_channel=in_channels, cfg=ehfr_net_config["layer2"]
-        )
-        self.model_conf_dict["layer2"] = {"in": in_channels, "out": out_channels}
-
-        in_channels = out_channels
-        self.layer_3, out_channels = self._make_hblock(
-            opts=opts, input_channel=in_channels, cfg=ehfr_net_config["layer3"]
-        )
-        self.model_conf_dict["layer3"] = {"in": in_channels, "out": out_channels}
-
-        in_channels = out_channels
-        self.layer_4, out_channels = self._make_hblock(
-            opts=opts, input_channel=in_channels, cfg=ehfr_net_config["layer4"],
-        )
-        self.model_conf_dict["layer4"] = {"in": in_channels, "out": out_channels}
-
-        in_channels = out_channels
-        self.layer_5, out_channels = self._make_hblock(
-            opts=opts, input_channel=in_channels, cfg=ehfr_net_config["layer5"],
-        )
-        self.model_conf_dict["layer5"] = {"in": in_channels, "out": out_channels}
-
-        self.conv_1x1_exp = Identity()
-        self.model_conf_dict["exp_before_cls"] = {
-            "in": out_channels,
-            "out": out_channels,
+        # Store model configuration
+        self.model_conf_dict = {
+            "backbone": {"in": 3, "out": out_channels},  # RGB input -> 1280D output
+            "exp_before_cls": {"in": out_channels, "out": out_channels}
         }
 
+        # 1x1 expansion (kept for compatibility)
+        self.conv_1x1_exp = Identity()
+
+        # Classifier (same as original)
         self.classifier = nn.Sequential(
             GlobalPool(pool_type=pool_type, keep_dim=False),
             LinearLayer(in_features=out_channels, out_features=num_classes, bias=True),
         )
 
-        # check model
-        self.check_model()
-
-        # weight initialization
+        # Weight initialization (preserves original logic)
         self.reset_parameters(opts=opts)
+
+    def forward(self, x):
+        # EfficientNet feature extraction
+        x = self.backbone(x)
+        
+        # Original EHFR-Net processing
+        x = self.conv_1x1_exp(x)
+        x = self.classifier(x)
+        return x
+    # def __init__(self, opts, *args, **kwargs) -> None:
+    #     num_classes = getattr(opts, "model.classification.n_classes", 101)
+    #     pool_type = getattr(opts, "model.layer.global_pool", "mean")
+        
+    #     #new code starts
+        
+    #     # Replace manual CNN blocks with EfficientNet-B0
+    #     self.backbone = models.efficientnet_b0(pretrained=True).features
+        
+    #     # Get output channels from EfficientNet's last layer
+    #     out_channels = 1280  # EfficientNet-B0's final feature dimension
+        
+    #     self.conv_1x1_exp = Identity()
+    #     self.model_conf_dict = {
+    #         "exp_before_cls": {"in": out_channels, "out": out_channels}
+    #     }
+        
+    #     self.classifier = nn.Sequential(
+    #         GlobalPool(pool_type=pool_type, keep_dim=False),
+    #         LinearLayer(in_features=out_channels, out_features=num_classes, bias=True),
+    #     )
+    #     #new code ends
+        
+    #     ehfr_net_config = get_configuration(opts=opts)
+    #     image_channels = ehfr_net_config["layer0"]["img_channels"]
+    #     out_channels = ehfr_net_config["layer0"]["out_channels"]
+
+    #     super().__init__(*args, **kwargs)
+
+    #     # store model configuration in a dictionary
+    #     self.model_conf_dict = dict()
+    #     self.conv_1 = ConvLayer(
+    #         opts=opts,
+    #         in_channels=image_channels,
+    #         out_channels=out_channels,
+    #         kernel_size=3,
+    #         stride=2,
+    #         use_norm=True,
+    #         use_act=True,
+    #     )
+
+    #     self.model_conf_dict["conv1"] = {"in": image_channels, "out": out_channels}
+
+    #     in_channels = out_channels
+    #     self.layer_1, out_channels = self._make_hblock(
+    #         opts=opts, input_channel=in_channels, cfg=ehfr_net_config["layer1"]
+    #     )
+    #     self.model_conf_dict["layer1"] = {"in": in_channels, "out": out_channels}
+
+    #     in_channels = out_channels
+    #     self.layer_2, out_channels = self._make_hblock(
+    #         opts=opts, input_channel=in_channels, cfg=ehfr_net_config["layer2"]
+    #     )
+    #     self.model_conf_dict["layer2"] = {"in": in_channels, "out": out_channels}
+
+    #     in_channels = out_channels
+    #     self.layer_3, out_channels = self._make_hblock(
+    #         opts=opts, input_channel=in_channels, cfg=ehfr_net_config["layer3"]
+    #     )
+    #     self.model_conf_dict["layer3"] = {"in": in_channels, "out": out_channels}
+
+    #     in_channels = out_channels
+    #     self.layer_4, out_channels = self._make_hblock(
+    #         opts=opts, input_channel=in_channels, cfg=ehfr_net_config["layer4"],
+    #     )
+    #     self.model_conf_dict["layer4"] = {"in": in_channels, "out": out_channels}
+
+    #     in_channels = out_channels
+    #     self.layer_5, out_channels = self._make_hblock(
+    #         opts=opts, input_channel=in_channels, cfg=ehfr_net_config["layer5"],
+    #     )
+    #     self.model_conf_dict["layer5"] = {"in": in_channels, "out": out_channels}
+
+    #     self.conv_1x1_exp = Identity()
+    #     self.model_conf_dict["exp_before_cls"] = {
+    #         "in": out_channels,
+    #         "out": out_channels,
+    #     }
+
+    #     self.classifier = nn.Sequential(
+    #         GlobalPool(pool_type=pool_type, keep_dim=False),
+    #         LinearLayer(in_features=out_channels, out_features=num_classes, bias=True),
+    #     )
+
+    #     # check model
+    #     self.check_model()
+
+    #     # weight initialization
+    #     self.reset_parameters(opts=opts)
 
     @classmethod
     def add_arguments(cls, parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
