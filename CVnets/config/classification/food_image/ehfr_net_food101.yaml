@@ -9,9 +9,7 @@ common:
 dataset:
   root_train: "C:/Users/Admin/OneDrive/Documents/LdullPLab/CVnets/datasets/food_101split/kaggle/working/split_dataset/train"
   root_val: "C:/Users/Admin/OneDrive/Documents/LdullPLab/CVnets/datasets/food_101split/kaggle/working/split_dataset/val"
-  train_index_file: "train_full.txt"
-  val_index_file: "test_full.txt"
-  name: "food"
+  name: "food_another"
   category: "classification"
   train_batch_size0: 32
   val_batch_size0: 32
@@ -28,18 +26,21 @@ image_augmentation:
     enable: true
   rand_augment:
     enable: true
+    magnitude: 7  # Increased from default (more diverse transforms)
   random_erase:
     enable: true
-    p: 0.25
+    p: 0.5  # Increased from 0.25 (more frequent occlusions)
+    scale: [0.02, 0.25]  # New: Controls erased area size
+    ratio: [0.3, 3.0]    # New: Controls erased aspect ratio
   mixup:
     enable: true
-    alpha: 0.2
+    alpha: 0.4  # Increased from 0.2 (stronger mixing)
   cutmix:
     enable: true
-    alpha: 1.0
+    alpha: 1.2  # Increased from 1.0 (more aggressive cuts)
   resize:
     enable: true
-    size: 288 # shorter size is 288
+    size: 288
     interpolation: "bicubic"
   center_crop:
     enable: true
@@ -74,9 +75,10 @@ model:
   classification:
     name: "ehfr_net"
     ehfr_net:
-      width_multiplier: 1.75
+      width_multiplier: 0.5
       attn_norm_layer: "layer_norm_2d"
       no_fuse_local_global_features: false
+      no_ca: false
     activation:
       name: "hard_swish"
   normalization:
