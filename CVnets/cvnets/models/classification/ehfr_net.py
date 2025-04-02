@@ -2,6 +2,7 @@
 from torch import nn
 import argparse
 from typing import Dict, Tuple
+from torchvision import models
 
 from . import register_cls_models
 from .base_cls import BaseEncoder
@@ -19,29 +20,24 @@ class EHFR_Net(BaseEncoder):
         num_classes = getattr(opts, "model.classification.n_classes", 101)
         pool_type = getattr(opts, "model.layer.global_pool", "mean")
 
-        # Load EfficientNet-B0 backbone (pretrained)
-        backbone = models.efficientnet_b0(pretrained=True)
-        self.backbone = backbone.features  # Use only the feature extractor
-        out_channels = 1280  # EfficientNet-B0's final num features
-
+        # First call parent's __init__()
         super().__init__(*args, **kwargs)
 
-        # Store model configuration
+        # Then initialize backbone
+        backbone = models.efficientnet_b0(pretrained=True)
+        self.backbone = backbone.features
+        out_channels = 1280
+
+        # Rest of your initialization...
         self.model_conf_dict = {
-            "backbone": {"in": 3, "out": out_channels},  # RGB input -> 1280D output
+            "backbone": {"in": 3, "out": out_channels},
             "exp_before_cls": {"in": out_channels, "out": out_channels}
         }
-
-        # 1x1 expansion (kept for compatibility)
         self.conv_1x1_exp = Identity()
-
-        # Classifier (same as original)
         self.classifier = nn.Sequential(
             GlobalPool(pool_type=pool_type, keep_dim=False),
             LinearLayer(in_features=out_channels, out_features=num_classes, bias=True),
         )
-
-        # Weight initialization (preserves original logic)
         self.reset_parameters(opts=opts)
 
     def forward(self, x):
