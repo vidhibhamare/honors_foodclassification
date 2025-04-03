@@ -79,7 +79,7 @@ class EHFR_Net(BaseEncoder):
         self.reset_parameters(opts=opts)
 
     def forward(self, x):
-        # Feature extraction
+    # Feature extraction
         cnn_feats = self.backbone(x)  # [B, 1280, H, W]
         projected = self.projection(cnn_feats)  # [B, 3, 224, 224]
         swin_out = self.swin(projected).last_hidden_state  # [B, 49, 768]
@@ -87,8 +87,8 @@ class EHFR_Net(BaseEncoder):
         # Cross-attention fusion
         fused = self.fusion(cnn_feats, swin_out)  # [B, 49, 768]
         
-        # Classification
-        cls_token = fused[:, 0]  # Take CLS token [B, 768]
+        # Use CLS token for classification
+        cls_token = fused[:, 0]  # [B, 768]
         return self.classifier(cls_token)
     # def forward(self, x):
     #     # 1. EfficientNet feature extraction
