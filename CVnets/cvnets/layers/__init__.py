@@ -57,6 +57,7 @@ __all__ = [
     "SingleHeadAttention",
     "Softmax",
     "LinearSelfAttention",
+    "CrossAttentionFusion"
 ]
 
 

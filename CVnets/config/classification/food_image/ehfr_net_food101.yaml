@@ -97,6 +97,10 @@ model:
       projection:
         out_channels: 3
         resize_to: 224
+      fusion:
+        enable: true
+        num_heads: 4
+        dropout: 0.1
     activation:
       name: "hard_swish"
   normalization:

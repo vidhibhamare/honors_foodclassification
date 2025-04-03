@@ -1,9 +1,11 @@
 
 from torch import nn
+import torch
 import argparse
 from typing import Dict, Tuple
 from torchvision import models
 from transformers import SwinModel
+from layers import CrossAttentionFusion
 
 from . import register_cls_models
 from .base_cls import BaseEncoder
@@ -43,17 +45,28 @@ class EHFR_Net(BaseEncoder):
         #     ),
         #     nn.AdaptiveAvgPool2d((224, 224))  # Resize to Swin's expected input size
         # )
+        # Add after Swin initialization
+        self.fusion = CrossAttentionFusion(
+            cnn_dim=1280,  # EfficientNet-B0 output channels
+            vit_dim=768    # Swin-Tiny embed_dim
+        )
+        
         self.projection = nn.Sequential(
             nn.Conv2d(1280, 3, kernel_size=1),  # Channel reduction
             nn.AdaptiveAvgPool2d((224, 224)),   # Spatial resizing
             nn.Hardswish()                      # Activation
         )
         # Classification head
+        # self.classifier = nn.Sequential(
+        #     # GlobalPool(pool_type=pool_type, keep_dim=False),
+        #     nn.LayerNorm(768), 
+        #     LinearLayer(in_features=768, out_features=num_classes, bias=True),  # Swin base has 768-dim output
+        # )
+        # Modify classifier input dim
         self.classifier = nn.Sequential(
-            # GlobalPool(pool_type=pool_type, keep_dim=False),
-            nn.LayerNorm(768), 
-            LinearLayer(in_features=768, out_features=num_classes, bias=True),  # Swin base has 768-dim output
+            LinearLayer(768 + 1280, num_classes)  # Concatenated features
         )
+
 
         # Model configuration dictionary
         self.model_conf_dict = {
@@ -65,35 +78,45 @@ class EHFR_Net(BaseEncoder):
         self.reset_parameters(opts=opts)
 
     def forward(self, x):
-        # 1. EfficientNet feature extraction
-        cnn_features = self.backbone(x)  # [B, 1280, H, W]
+        cnn_feats = self.backbone(x)  # [B, 1280, H, W]
+        projected = self.projection(cnn_feats)  # [B, 3, 224, 224]
+        swin_out = self.swin(projected).last_hidden_state  # [B, 49, 768]
         
-        # 2. Project to Swin input space
-        projected_features = self.projection(cnn_features)  # [B, 3, 224, 224]
+        # Feature Fusion
+        fused_feats = self.fusion(cnn_feats, swin_out)  # [B, 49, 1280]
+        cls_token = torch.cat([fused_feats[:, 0], cnn_feats.mean([2,3])], dim=1)
         
-        # 3. Swin Transformer processing
-        swin_output = self.swin(projected_features)  # BaseModelOutput
-        
-        # 4. Dimension handling with debug checks
-        if not hasattr(swin_output, 'last_hidden_state'):
-            raise ValueError("Swin output missing last_hidden_state. Got keys: " + str(swin_output.keys()))
-        
-        last_hidden = swin_output.last_hidden_state  # [B, seq_len, embed_dim]
-        
-        # 5. Proper CLS token extraction
-        if last_hidden.dim() != 3:
-            raise ValueError(f"Hidden state must be 3D. Got shape {last_hidden.shape}")
-        
-        cls_token = last_hidden[:, 0, :]  # Take first token [B, embed_dim]
-        
-        # 6. Ensure proper dimensions before classifier
-        if cls_token.dim() == 1:
-            cls_token = cls_token.unsqueeze(0)  # Add batch dim if missing
-        elif cls_token.dim() != 2:
-            raise ValueError(f"CLS token must be 2D. Got shape {cls_token.shape}")
-
-        # 7. Classification
         return self.classifier(cls_token)
+    # def forward(self, x):
+    #     # 1. EfficientNet feature extraction
+    #     cnn_features = self.backbone(x)  # [B, 1280, H, W]
+        
+    #     # 2. Project to Swin input space
+    #     projected_features = self.projection(cnn_features)  # [B, 3, 224, 224]
+        
+    #     # 3. Swin Transformer processing
+    #     swin_output = self.swin(projected_features)  # BaseModelOutput
+        
+    #     # 4. Dimension handling with debug checks
+    #     if not hasattr(swin_output, 'last_hidden_state'):
+    #         raise ValueError("Swin output missing last_hidden_state. Got keys: " + str(swin_output.keys()))
+        
+    #     last_hidden = swin_output.last_hidden_state  # [B, seq_len, embed_dim]
+        
+    #     # 5. Proper CLS token extraction
+    #     if last_hidden.dim() != 3:
+    #         raise ValueError(f"Hidden state must be 3D. Got shape {last_hidden.shape}")
+        
+    #     cls_token = last_hidden[:, 0, :]  # Take first token [B, embed_dim]
+        
+    #     # 6. Ensure proper dimensions before classifier
+    #     if cls_token.dim() == 1:
+    #         cls_token = cls_token.unsqueeze(0)  # Add batch dim if missing
+    #     elif cls_token.dim() != 2:
+    #         raise ValueError(f"CLS token must be 2D. Got shape {cls_token.shape}")
+
+    #     # 7. Classification
+    #     return self.classifier(cls_token)
     #commented before swin
     # def __init__(self, opts, *args, **kwargs) -> None:
     #     num_classes = getattr(opts, "model.classification.n_classes", 101)
