@@ -32,21 +32,26 @@ class EHFR_Net(BaseEncoder):
         self.swin = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
         
         # Projection layer to adapt CNN features to Swin input
+        # self.projection = nn.Sequential(
+        #     ConvLayer(
+        #         opts=opts,
+        #         in_channels=cnn_out_channels,
+        #         out_channels=3,  # Swin expects 3-channel input
+        #         kernel_size=1,
+        #         use_norm=True,
+        #         use_act=True
+        #     ),
+        #     nn.AdaptiveAvgPool2d((224, 224))  # Resize to Swin's expected input size
+        # )
         self.projection = nn.Sequential(
-            ConvLayer(
-                opts=opts,
-                in_channels=cnn_out_channels,
-                out_channels=3,  # Swin expects 3-channel input
-                kernel_size=1,
-                use_norm=True,
-                use_act=True
-            ),
-            nn.AdaptiveAvgPool2d((224, 224))  # Resize to Swin's expected input size
+            nn.Conv2d(1280, 3, kernel_size=1),  # Channel reduction
+            nn.AdaptiveAvgPool2d((224, 224)),   # Spatial resizing
+            nn.Hardswish()                      # Activation
         )
-        
         # Classification head
         self.classifier = nn.Sequential(
-            GlobalPool(pool_type=pool_type, keep_dim=False),
+            # GlobalPool(pool_type=pool_type, keep_dim=False),
+            nn.LayerNorm(768), 
             LinearLayer(in_features=768, out_features=num_classes, bias=True),  # Swin base has 768-dim output
         )
 
@@ -60,25 +65,35 @@ class EHFR_Net(BaseEncoder):
         self.reset_parameters(opts=opts)
 
     def forward(self, x):
-        # EfficientNet feature extraction
+        # 1. EfficientNet feature extraction
         cnn_features = self.backbone(x)  # [B, 1280, H, W]
         
-        # Project features for Swin input
+        # 2. Project to Swin input space
         projected_features = self.projection(cnn_features)  # [B, 3, 224, 224]
         
-        # Swin Transformer processing
-        swin_output = self.swin(projected_features)  # Returns BaseModelOutput
+        # 3. Swin Transformer processing
+        swin_output = self.swin(projected_features)  # BaseModelOutput
         
-        # Get last hidden state and ensure proper dimensions
-        last_hidden_state = swin_output.last_hidden_state  # [B, seq_len, embed_dim]
+        # 4. Dimension handling with debug checks
+        if not hasattr(swin_output, 'last_hidden_state'):
+            raise ValueError("Swin output missing last_hidden_state. Got keys: " + str(swin_output.keys()))
         
-        # Use CLS token (index 0) for classification
-        cls_token = last_hidden_state[:, 0, :]  # [B, embed_dim]
+        last_hidden = swin_output.last_hidden_state  # [B, seq_len, embed_dim]
         
-        # Classification head
-        cls_output = self.classifier(cls_token)  # [B, num_classes]
-    
-        return cls_output
+        # 5. Proper CLS token extraction
+        if last_hidden.dim() != 3:
+            raise ValueError(f"Hidden state must be 3D. Got shape {last_hidden.shape}")
+        
+        cls_token = last_hidden[:, 0, :]  # Take first token [B, embed_dim]
+        
+        # 6. Ensure proper dimensions before classifier
+        if cls_token.dim() == 1:
+            cls_token = cls_token.unsqueeze(0)  # Add batch dim if missing
+        elif cls_token.dim() != 2:
+            raise ValueError(f"CLS token must be 2D. Got shape {cls_token.shape}")
+
+        # 7. Classification
+        return self.classifier(cls_token)
     #commented before swin
     # def __init__(self, opts, *args, **kwargs) -> None:
     #     num_classes = getattr(opts, "model.classification.n_classes", 101)
