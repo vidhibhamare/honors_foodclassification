@@ -70,14 +70,24 @@ class GlobalPool(BaseLayer):
             x = torch.mean(x, dim=dims, keepdim=self.keep_dim)
         return x
 
-    def forward(self, x: Tensor) -> Tensor:
-        if x.dim() == 4:
-            dims = [-2, -1]
-        elif x.dim() == 5:
-            dims = [-3, -2, -1]
-        else:
-            raise NotImplementedError("Currently 2D and 3D global pooling supported")
-        return self._global_pool(x, dims=dims)
+    # def forward(self, x: Tensor) -> Tensor:
+    #     if x.dim() == 4:
+    #         dims = [-2, -1]
+    #     elif x.dim() == 5:
+    #         dims = [-3, -2, -1]
+    #     else:
+    #         raise NotImplementedError("Currently 2D and 3D global pooling supported")
+    #     return self._global_pool(x, dims=dims)
+    
+    def forward(self, x):
+        if self.pool_type not in [20, 30, "mean", "max"]:  # Added string support
+            raise NotImplementedError("Supported: 20, 30, 'mean', or 'max'")
+        
+        if self.pool_type == "mean":
+            return x.mean(dim=[-2, -1], keepdim=self.keep_dim)
+        elif self.pool_type == "max":
+            return x.max(dim=[-2, -1], keepdim=self.keep_dim)[0]
+        # ... rest of existing implementation
 
     def profile_module(self, input: Tensor) -> Tuple[Tensor, float, float]:
         input = self.forward(input)

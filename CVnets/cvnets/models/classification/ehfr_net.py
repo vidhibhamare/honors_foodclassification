@@ -60,7 +60,7 @@ class EHFR_Net(BaseEncoder):
         self.reset_parameters(opts=opts)
 
     def forward(self, x):
-        # EfficientNet feature extraction
+    # EfficientNet feature extraction
         cnn_features = self.backbone(x)
         
         # Project features for Swin input
@@ -69,11 +69,13 @@ class EHFR_Net(BaseEncoder):
         # Swin Transformer processing
         swin_output = self.swin(projected_features)
         
-        # Use the pooled output for classification
-        cls_output = self.classifier(swin_output.last_hidden_state)
+        # Modified pooling approach - use mean pooling of last hidden state
+        pooled_output = swin_output.last_hidden_state.mean(dim=1)  # Mean over sequence length
+        
+        # Classification head
+        cls_output = self.classifier(pooled_output)
         
         return cls_output
-    
     #commented before swin
     # def __init__(self, opts, *args, **kwargs) -> None:
     #     num_classes = getattr(opts, "model.classification.n_classes", 101)
