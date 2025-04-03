@@ -3,6 +3,7 @@ from torch import nn
 import argparse
 from typing import Dict, Tuple
 from torchvision import models
+from transformers import SwinModel
 
 from . import register_cls_models
 from .base_cls import BaseEncoder
@@ -16,38 +17,100 @@ class EHFR_Net(BaseEncoder):
     """
     This class defines the EHFR_Net architecture
     """
+    
     def __init__(self, opts, *args, **kwargs) -> None:
         num_classes = getattr(opts, "model.classification.n_classes", 101)
         pool_type = getattr(opts, "model.layer.global_pool", "mean")
 
-        # First call parent's __init__()
+        # Initialize backbone (EfficientNet)
         super().__init__(*args, **kwargs)
-
-        # Then initialize backbone
         backbone = models.efficientnet_b0(pretrained=True)
         self.backbone = backbone.features
-        out_channels = 1280
+        cnn_out_channels = 1280  # EfficientNet-B0's final feature dimension
 
-        # Rest of your initialization...
-        self.model_conf_dict = {
-            "backbone": {"in": 3, "out": out_channels},
-            "exp_before_cls": {"in": out_channels, "out": out_channels}
-        }
-        self.conv_1x1_exp = Identity()
+        # Swin Transformer initialization
+        self.swin = SwinModel.from_pretrained("microsoft/swin-tiny-patch4-window7-224")
+        
+        # Projection layer to adapt CNN features to Swin input
+        self.projection = nn.Sequential(
+            ConvLayer(
+                opts=opts,
+                in_channels=cnn_out_channels,
+                out_channels=3,  # Swin expects 3-channel input
+                kernel_size=1,
+                use_norm=True,
+                use_act=True
+            ),
+            nn.AdaptiveAvgPool2d((224, 224))  # Resize to Swin's expected input size
+        )
+        
+        # Classification head
         self.classifier = nn.Sequential(
             GlobalPool(pool_type=pool_type, keep_dim=False),
-            LinearLayer(in_features=out_channels, out_features=num_classes, bias=True),
+            LinearLayer(in_features=768, out_features=num_classes, bias=True),  # Swin base has 768-dim output
         )
+
+        # Model configuration dictionary
+        self.model_conf_dict = {
+            "backbone": {"in": 3, "out": cnn_out_channels},
+            "projection": {"in": cnn_out_channels, "out": 3},
+            "classifier": {"in": 768, "out": num_classes}
+        }
+
         self.reset_parameters(opts=opts)
 
     def forward(self, x):
         # EfficientNet feature extraction
-        x = self.backbone(x)
+        cnn_features = self.backbone(x)
         
-        # Original EHFR-Net processing
-        x = self.conv_1x1_exp(x)
-        x = self.classifier(x)
-        return x
+        # Project features for Swin input
+        projected_features = self.projection(cnn_features)
+        
+        # Swin Transformer processing
+        swin_output = self.swin(projected_features)
+        
+        # Use the pooled output for classification
+        cls_output = self.classifier(swin_output.last_hidden_state)
+        
+        return cls_output
+    
+    #commented before swin
+    # def __init__(self, opts, *args, **kwargs) -> None:
+    #     num_classes = getattr(opts, "model.classification.n_classes", 101)
+    #     pool_type = getattr(opts, "model.layer.global_pool", "mean")
+
+    #     # First call parent's __init__()
+    #     super().__init__(*args, **kwargs)
+
+    #     # Then initialize backbone
+    #     backbone = models.efficientnet_b0(pretrained=True)
+    #     self.backbone = backbone.features
+    #     out_channels = 1280
+
+    #     # Rest of your initialization...
+    #     self.model_conf_dict = {
+    #         "backbone": {"in": 3, "out": out_channels},
+    #         "exp_before_cls": {"in": out_channels, "out": out_channels}
+    #     }
+    #     self.conv_1x1_exp = Identity()
+    #     self.classifier = nn.Sequential(
+    #         GlobalPool(pool_type=pool_type, keep_dim=False),
+    #         LinearLayer(in_features=out_channels, out_features=num_classes, bias=True),
+    #     )
+    #     self.reset_parameters(opts=opts)
+
+    # def forward(self, x):
+    #     # EfficientNet feature extraction
+    #     x = self.backbone(x)
+        
+    #     # Original EHFR-Net processing
+    #     x = self.conv_1x1_exp(x)
+    #     x = self.classifier(x)
+    #     return x
+    
+    
+    
+    
     # def __init__(self, opts, *args, **kwargs) -> None:
     #     num_classes = getattr(opts, "model.classification.n_classes", 101)
     #     pool_type = getattr(opts, "model.layer.global_pool", "mean")

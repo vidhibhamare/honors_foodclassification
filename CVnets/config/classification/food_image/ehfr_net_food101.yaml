@@ -6,6 +6,7 @@ common:
   tensorboard_logging: false
   grad_clip: 10.0
   accum_freq: 4
+
 dataset:
   root_train: "C:/Users/Admin/OneDrive/Documents/LdullPLab/CVnets/datasets/food_101split/kaggle/working/split_dataset/train"
   root_val: "C:/Users/Admin/OneDrive/Documents/LdullPLab/CVnets/datasets/food_101split/kaggle/working/split_dataset/val"
@@ -18,43 +19,48 @@ dataset:
   prefetch_factor: 2
   persistent_workers: true
   pin_memory: true
+
 image_augmentation:
   random_resized_crop:
     enable: true
     interpolation: "bicubic"
+    size: 256  # Larger initial size for better Swin performance
   random_horizontal_flip:
     enable: true
   rand_augment:
     enable: true
-    magnitude: 7  # Increased from default (more diverse transforms)
+    magnitude: 7
   random_erase:
     enable: true
-    p: 0.5  # Increased from 0.25 (more frequent occlusions)
-    scale: [0.02, 0.25]  # New: Controls erased area size
-    ratio: [0.3, 3.0]    # New: Controls erased aspect ratio
+    p: 0.5
+    scale: [0.02, 0.25]
+    ratio: [0.3, 3.0]
   mixup:
     enable: true
-    alpha: 0.4  # Increased from 0.2 (stronger mixing)
+    alpha: 0.4
   cutmix:
     enable: true
-    alpha: 1.2  # Increased from 1.0 (more aggressive cuts)
+    alpha: 1.2
   resize:
     enable: true
     size: 256
     interpolation: "bicubic"
   center_crop:
     enable: true
-    size: 224
+    size: 224  # Swin's default input size
+
 sampler:
   name: "batch_sampler"
   bs:
     crop_size_width: 256
     crop_size_height: 256
+
 loss:
   category: "classification"
   classification:
     name: "cross_entropy"
     label_smoothing: 0.1
+
 optim:
   name: "adamw"
   weight_decay: 0.05
@@ -62,6 +68,7 @@ optim:
   adamw:
     beta1: 0.9
     beta2: 0.999
+
 scheduler:
   name: "cosine"
   is_iteration_based: false
@@ -71,14 +78,24 @@ scheduler:
   cosine:
     max_lr: 0.002
     min_lr: 0.0002
+
 model:
   classification:
     name: "ehfr_net"
     ehfr_net:
       width_multiplier: 0.5
-      #attn_norm_layer: "layer_norm_2d"
-      #no_fuse_local_global_features: false
-      no_ca: false
+      # Swin Transformer specific parameters
+      swin_config:
+        pretrained_name: "microsoft/swin-tiny-patch4-window7-224"
+        embed_dim: 96
+        depths: [2, 2, 6, 2]
+        num_heads: [3, 6, 12, 24]
+        window_size: 7
+        drop_path_rate: 0.2
+      # EfficientNet projection parameters
+      projection:
+        out_channels: 3
+        resize_to: 224
     activation:
       name: "hard_swish"
   normalization:
@@ -88,13 +105,15 @@ model:
     name: "hard_swish"
   layer:
     global_pool: "mean"
-    conv_init:  "kaiming_normal"
+    conv_init: "kaiming_normal"
     conv_init_std_dev: 0.02
     linear_init: "trunc_normal"
     linear_init_std_dev: 0.02
+
 ema:
   enable: true
   momentum: 0.0005
+
 stats:
   val: [ "loss", "top1", "top5" ]
   train: ["loss"]

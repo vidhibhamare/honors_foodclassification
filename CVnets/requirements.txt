@@ -1,19 +1,45 @@
+# ujson
+# scikit-learn>=0.19.2
+# scikit-image
+
+# # requirement for Pytorch, Torchvision
+# torch>=1.8.0
+# torchvision>=0.9.0
+
+# # dependency for reading and writing images
+# opencv-contrib-python
+
+# # PyAV for video decoding
+# av
+
+# # FVCore for FLOP calculation
+# fvcore
+
+# # pyyaml for dealing with yaml file
+# pyyaml
+
+
+# Core dependencies
 ujson
-scikit-learn>=0.19.2
-scikit-image
+scikit-learn>=1.0.2  # Updated minimum version
+scikit-image>=0.19.3
 
-# requirement for Pytorch, Torchvision
-torch>=1.8.0
-torchvision>=0.9.0
+# PyTorch ecosystem (updated versions for Swin compatibility)
+torch>=1.12.0  # Minimum for Swin Transformer support
+torchvision>=0.13.0
 
-# dependency for reading and writing images
-opencv-contrib-python
+# Image/video processing
+opencv-contrib-python>=4.5.5
+av>=9.2.0  # Updated video decoding
 
-# PyAV for video decoding
-av
+# Transformer-specific additions
+transformers>=4.30.0  # For Swin model
+timm>=0.6.12  # Alternative Swin implementation
 
-# FVCore for FLOP calculation
-fvcore
+# Existing utilities
+fvcore>=0.1.5  # FLOP calculation
+pyyaml>=6.0  # Config handling
 
-# pyyaml for dealing with yaml file
-pyyaml
+# Optional but recommended for Swin
+einops>=0.4.1  # For tensor reshaping
+accelerate>=0.20.0  # For mixed-precision training
