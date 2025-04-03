@@ -62,8 +62,10 @@ class EHFR_Net(BaseEncoder):
         #     LinearLayer(in_features=768, out_features=num_classes, bias=True),  # Swin base has 768-dim output
         # )
         # Modify classifier input dim
+        # Change this in __init__
         self.classifier = nn.Sequential(
-            LinearLayer(768 + 1280, num_classes)  # Concatenated features
+            nn.LayerNorm(768),
+            LinearLayer(768, num_classes)  # Input dim matches Swin
         )
 
 
@@ -77,14 +79,16 @@ class EHFR_Net(BaseEncoder):
         self.reset_parameters(opts=opts)
 
     def forward(self, x):
+        # Feature extraction
         cnn_feats = self.backbone(x)  # [B, 1280, H, W]
         projected = self.projection(cnn_feats)  # [B, 3, 224, 224]
         swin_out = self.swin(projected).last_hidden_state  # [B, 49, 768]
         
-        # Feature Fusion
-        fused_feats = self.fusion(cnn_feats, swin_out)  # [B, 49, 1280]
-        cls_token = torch.cat([fused_feats[:, 0], cnn_feats.mean([2,3])], dim=1)
+        # Cross-attention fusion
+        fused = self.fusion(cnn_feats, swin_out)  # [B, 49, 768]
         
+        # Classification
+        cls_token = fused[:, 0]  # Take CLS token [B, 768]
         return self.classifier(cls_token)
     # def forward(self, x):
     #     # 1. EfficientNet feature extraction
