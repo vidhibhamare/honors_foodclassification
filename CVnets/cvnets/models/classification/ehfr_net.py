@@ -5,12 +5,11 @@ import argparse
 from typing import Dict, Tuple
 from torchvision import models
 from transformers import SwinModel
-from layers import CrossAttentionFusion
 
 from . import register_cls_models
 from .base_cls import BaseEncoder
 from .config.ehfr_net import get_configuration
-from ...layers import ConvLayer, LinearLayer, GlobalPool, Identity
+from ...layers import ConvLayer, LinearLayer, GlobalPool, Identity, cross_attention
 from ...modules import HBlock as Block
 
 
@@ -46,7 +45,7 @@ class EHFR_Net(BaseEncoder):
         #     nn.AdaptiveAvgPool2d((224, 224))  # Resize to Swin's expected input size
         # )
         # Add after Swin initialization
-        self.fusion = CrossAttentionFusion(
+        self.fusion = cross_attention.CrossAttentionFusion(
             cnn_dim=1280,  # EfficientNet-B0 output channels
             vit_dim=768    # Swin-Tiny embed_dim
         )
