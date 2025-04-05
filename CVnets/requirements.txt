@@ -107,8 +107,6 @@ Pillow>=9.0.1
 albumentations>=1.1.0  # For advanced augmentations
 
 # Distributed Training
-torch-elastic  # For distributed training utilities
-torchmetrics>=0.9.0  # For additional metrics
 
 # Utils
 tqdm>=4.64.0  # Progress bars
