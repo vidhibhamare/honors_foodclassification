@@ -1,8 +1,13 @@
+# import multiprocessing
 import multiprocessing
 import torch
 import math
 from torch.cuda.amp import GradScaler
 from torch.distributed.elastic.multiprocessing import errors
+from sklearn.metrics import precision_recall_fscore_support
+import matplotlib.pyplot as plt
+import pandas as pd
+import os
 
 from utils import logger
 from options.opts import get_training_arguments
@@ -28,18 +33,65 @@ import experiments_config
 
 @errors.record
 def main(opts, **kwargs):
-    num_gpus = getattr(opts, "dev.num_gpus", 0)  # defaults are for CPU
+    num_gpus = getattr(opts, "dev.num_gpus", 0)
     dev_id = getattr(opts, "dev.device_id", torch.device("cpu"))
     device = getattr(opts, "dev.device", torch.device("cpu"))
     is_distributed = getattr(opts, "ddp.use_distributed", False)
-
     is_master_node = is_master(opts)
+
+    # Metric tracking setup
+    training_metrics = {
+        'iterations': [],
+        'precisions': [],
+        'recalls': [],
+        'f1_scores': []
+    }
+
+    def log_metrics(current_iteration, y_true, y_pred):
+        p, r, f1, _ = precision_recall_fscore_support(
+            y_true.cpu(), y_pred.cpu(), average='weighted', zero_division=0
+        )
+        training_metrics['iterations'].append(current_iteration)
+        training_metrics['precisions'].append(p)
+        training_metrics['recalls'].append(r)
+        training_metrics['f1_scores'].append(f1)
+        
+        if current_iteration % 500 == 0 and is_master_node:
+            save_metrics_plot(opts, training_metrics)
+
+    def save_metrics_plot(opts, metrics):
+        plt.figure(figsize=(12, 6))
+        plt.plot(metrics['iterations'], metrics['precisions'], 'b-', label='Precision')
+        plt.plot(metrics['iterations'], metrics['recalls'], 'g-', label='Recall')
+        plt.plot(metrics['iterations'], metrics['f1_scores'], 'r-', label='F1-Score')
+        
+        # Add smoothed lines
+        window_size = max(1, len(metrics['iterations']) // 20)
+        if window_size > 1:
+            plt.plot(metrics['iterations'], 
+                    pd.Series(metrics['precisions']).rolling(window_size).mean(),
+                    'b--', alpha=0.5)
+            plt.plot(metrics['iterations'], 
+                    pd.Series(metrics['recalls']).rolling(window_size).mean(),
+                    'g--', alpha=0.5)
+            plt.plot(metrics['iterations'], 
+                    pd.Series(metrics['f1_scores']).rolling(window_size).mean(),
+                    'r--', alpha=0.5)
+        
+        plt.xlabel('Iterations')
+        plt.ylabel('Score')
+        plt.title('Training Metrics Over Time')
+        plt.legend()
+        plt.grid(True)
+        
+        plot_path = os.path.join(getattr(opts, "common.exp_loc"), "training_metrics.png")
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
 
     # set-up data loaders
     train_loader, val_loader, train_sampler = create_train_val_loader(opts)
 
     # compute max iterations based on max epochs
-    # Useful in doing polynomial decay
     is_iteration_based = getattr(opts, "scheduler.is_iteration_based", False)
     if is_iteration_based:
         max_iter = getattr(opts, "scheduler.max_iterations", DEFAULT_ITERATIONS)
@@ -59,6 +111,7 @@ def main(opts, **kwargs):
         max_epochs = getattr(opts, "scheduler.max_epochs", DEFAULT_EPOCHS)
         if is_master_node:
             logger.log("Max. epochs for training: {}".format(max_epochs))
+
     # set-up the model
     model = get_model(opts)
 
@@ -145,7 +198,24 @@ def main(opts, **kwargs):
         if is_master_node:
             logger.log("Finetuning model from checkpoint {}".format(finetune_loc))
 
-    training_engine = Trainer(
+    # Custom Trainer Class with Metrics Tracking
+    class MetricsTrackingTrainer(Trainer):
+        def training_iteration(self, *args, **kwargs):
+            output = super().training_iteration(*args, **kwargs)
+            
+            if is_master_node:
+                current_iter = self.epoch * len(self.train_loader) + self.batch_idx
+                
+                if current_iter % 100 == 0:
+                    with torch.no_grad():
+                        samples, targets = args[0], args[1]
+                        outputs = self.model(samples)
+                        _, preds = torch.max(outputs, 1)
+                        log_metrics(current_iter, targets, preds)
+            
+            return output
+
+    training_engine = MetricsTrackingTrainer(
         opts=opts,
         model=model,
         validation_loader=val_loader,
@@ -161,6 +231,13 @@ def main(opts, **kwargs):
     )
 
     training_engine.run(train_sampler=train_sampler)
+
+    # Final metrics save
+    if is_master_node:
+        save_metrics_plot(opts, training_metrics)
+        metrics_path = os.path.join(getattr(opts, "common.exp_loc"), "training_metrics.csv")
+        pd.DataFrame(training_metrics).to_csv(metrics_path, index=False)
+        logger.log(f"Training metrics saved to {metrics_path}")
 
 
 def distributed_worker(i, main, opts, kwargs):
@@ -179,11 +256,10 @@ def distributed_worker(i, main, opts, kwargs):
 
 
 def main_worker(**kwargs):
-    print("1. Starting main_worker") 
     warnings.filterwarnings("ignore")
     experiments_config.ehfr_net_config_forward(dataset_name="food256", width_multiplier=1.75)
     opts = get_training_arguments()
-    print(opts)
+    
     # device set-up
     opts = device_setup(opts)
 
@@ -254,5 +330,4 @@ def main_worker(**kwargs):
 
 
 if __name__ == "__main__":
-    #
     main_worker()
